@@ -11,9 +11,9 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 if not TELEGRAM_TOKEN:
-    raise ValueError("TELEGRAM_TOKEN environment variable not set!")
+    raise ValueError("TELEGRAM_TOKEN not set!")
 if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY environment variable not set!")
+    raise ValueError("GROQ_API_KEY not set!")
 
 DEFAULT_LANG = "hinglish"
 MEMORY_FILE = "memory.json"
@@ -109,7 +109,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_memory(memory_store)
     await update.message.reply_text(reply)
 
-if __name__ == '__main__':
+async def main():
     print("Bot starting...")
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
@@ -120,4 +120,8 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("set_mandyali", set_mandyali))
     app.add_handler(CommandHandler("reset", reset_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.run_polling()
+    await app.run_polling()
+
+if __name__ == '__main__':
+    import asyncio
+    asyncio.run(main())

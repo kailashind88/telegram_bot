@@ -55,7 +55,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     society = db.get_or_create_society(chat_id)
     await update.message.reply_text(
-        "Namaste! RWA Bot mein aapka swagat hai!\n\n"
+        "Namaste!Posh City RWA Bot mein aapka swagat hai!\n\n"
         "Kya aap:\n"
         "1. Admin hain? /admin likho\n"
         "2. Resident hain? Apna flat number likho (jaise: 302)"

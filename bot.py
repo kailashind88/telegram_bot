@@ -1,234 +1,168 @@
-require("dotenv").config();
-const TelegramBot = require("node-telegram-bot-api");
-const Groq = require("groq-sdk");
-const fs = require("fs");
+import os
+import json
+import logging
+from groq import Groq
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
-// ─────────────────────────────────────────────
-// CONFIGURATION
-// ─────────────────────────────────────────────
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-const GROQ_API_KEY   = process.env.GROQ_API_KEY;
-const DEFAULT_LANG   = "hinglish";
-const MEMORY_FILE    = "memory.json";
-// ─────────────────────────────────────────────
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
-const groq = new Groq({ apiKey: GROQ_API_KEY });
-const bot  = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+DEFAULT_LANG = "hinglish"
+MEMORY_FILE = "memory.json"
 
-// ─────────────────────────────────────────────
-// MEMORY STORAGE (Persistent JSON)
-// ─────────────────────────────────────────────
-function loadMemory() {
-  if (!fs.existsSync(MEMORY_FILE)) {
-    return {};
-  }
-  return JSON.parse(fs.readFileSync(MEMORY_FILE));
-}
+groq_client = Groq(api_key=GROQ_API_KEY)
 
-function saveMemory(memory) {
-  fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 2));
-}
+user_lang_map = {}
 
-let memoryStore = loadMemory();
+def load_memory():
+    if not os.path.exists(MEMORY_FILE):
+        return {}
+    with open(MEMORY_FILE, "r") as f:
+        return json.load(f)
 
-// Store each user's preferred language
-const userLangMap = {};
+def save_memory(memory):
+    with open(MEMORY_FILE, "w") as f:
+        json.dump(memory, f, indent=2)
 
-console.log("✅ Memory-enabled Bot is running!");
-console.log("📌 Type /language to switch language");
-console.log("📌 Type /reset to clear memory");
+memory_store = load_memory()
 
-// ─────────────────────────────────────────────
-// STEP 1: Get Hindi Answer (with memory)
-// ─────────────────────────────────────────────
-async function getHindiAnswer(userMessage, history = []) {
-  const response = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages: [
-      {
-        role: "system",
-        content: `You are a helpful assistant.
-Always reply in simple Hindi (Devanagari script).
-Keep reply short and conversational.`,
-      },
-      ...history,
-      {
-        role: "user",
-        content: userMessage,
-      },
-    ],
-  });
+def get_hindi_answer(user_message, history=None):
+    if history is None:
+        history = []
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a helpful assistant. Always reply in simple Hindi (Devanagari script). Keep reply short and conversational."
+        }
+    ]
+    messages.extend(history)
+    messages.append({"role": "user", "content": user_message})
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=messages
+    )
+    return response.choices[0].message.content
 
-  return response.choices[0].message.content;
-}
-
-// ─────────────────────────────────────────────
-// STEP 2: Translate Hindi to Pahari Dialects
-// ─────────────────────────────────────────────
-async function translateToPahari(hindiText, dialect) {
-
-  const dialectInstructions = {
-    pahari: `Translate Hindi text into General Himachali Pahari.
-Use Devanagari. Sound like local Himachali speaking casually.`,
-
-    kangri: `Translate Hindi text into Kangri dialect (Kangra region).
-Use Devanagari. Casual local tone.`,
-
-    mandyali: `Translate Hindi text into Mandyali dialect (Mandi region).
-Use Devanagari. Friendly local tone.`,
-  };
-
-  const instruction = dialectInstructions[dialect] || dialectInstructions["pahari"];
-
-  const response = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages: [
-      {
-        role: "system",
-        content: `You are an expert translator.
-${instruction}
-IMPORTANT:
-- Only output translated text
-- No explanation
-- No English
-- Keep friendly tone`,
-      },
-      {
-        role: "user",
-        content: hindiText,
-      },
-    ],
-  });
-
-  return response.choices[0].message.content;
-}
-
-// ─────────────────────────────────────────────
-// MAIN AI FUNCTION (with memory support)
-// ─────────────────────────────────────────────
-async function askAI(userMessage, lang, history = []) {
-  try {
-    if (lang === "hinglish") {
-
-      const response = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "system",
-            content: `You are a friendly assistant for people from Himachal Pradesh.
-Always reply in simple Hinglish.
-Short and conversational.`,
-          },
-          ...history,
-          { role: "user", content: userMessage },
-        ],
-      });
-
-      return response.choices[0].message.content;
-
-    } else {
-
-      const hindiAnswer = await getHindiAnswer(userMessage, history);
-      const pahariAnswer = await translateToPahari(hindiAnswer, lang);
-      return pahariAnswer;
+def translate_to_pahari(hindi_text, dialect):
+    dialect_instructions = {
+        "pahari": "Translate Hindi text into General Himachali Pahari. Use Devanagari. Sound like local Himachali speaking casually.",
+        "kangri": "Translate Hindi text into Kangri dialect (Kangra region). Use Devanagari. Casual local tone.",
+        "mandyali": "Translate Hindi text into Mandyali dialect (Mandi region). Use Devanagari. Friendly local tone."
     }
+    instruction = dialect_instructions.get(dialect, dialect_instructions["pahari"])
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are an expert translator. " + instruction + " IMPORTANT: Only output translated text. No explanation. No English. Keep friendly tone."
+            },
+            {
+                "role": "user",
+                "content": hindi_text
+            }
+        ]
+    )
+    return response.choices[0].message.content
 
-  } catch (error) {
-    console.error("AI error:", error.message);
-    return "माफ़ करिए, थोड़ी दिक्कत आ रही है। थोड़ी देर बाद फिर कोशिश करें 🙏";
-  }
-}
+def ask_ai(user_message, lang, history=None):
+    if history is None:
+        history = []
+    try:
+        if lang == "hinglish":
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a friendly assistant for people from Himachal Pradesh. Always reply in simple Hinglish. Short and conversational."
+                }
+            ]
+            messages.extend(history)
+            messages.append({"role": "user", "content": user_message})
+            response = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages
+            )
+            return response.choices[0].message.content
+        else:
+            hindi_answer = get_hindi_answer(user_message, history)
+            pahari_answer = translate_to_pahari(hindi_answer, lang)
+            return pahari_answer
+    except Exception as e:
+        print("AI error:", str(e))
+        return "Maaf kariye, thodi dikkat aa rahi hai. Thodi der baad phir koshish karein."
 
-// ─────────────────────────────────────────────
-// LANGUAGE DISPLAY NAME
-// ─────────────────────────────────────────────
-function getLangName(lang) {
-  const names = {
-    hinglish: "Hinglish 🇮🇳",
-    pahari:   "General Pahari 🏔️",
-    kangri:   "Kangri 🏔️",
-    mandyali: "Mandyali 🏔️",
-  };
-  return names[lang] || "Hinglish";
-}
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in user_lang_map:
+        user_lang_map[user_id] = DEFAULT_LANG
+    await update.message.reply_text("Han G Maraj! Aaun Tusa Ra AI assistant aa")
 
-// ─────────────────────────────────────────────
-// COMMANDS
-// ─────────────────────────────────────────────
-bot.onText(/\/start/, (msg) => {
-  const userId = msg.from.id;
-  if (!userLangMap[userId]) userLangMap[userId] = DEFAULT_LANG;
-  bot.sendMessage(msg.chat.id, "Han G Maraj! Aaun Tusa Ra AI assistant aa 🤖");
-});
+async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = "Choose Language:\n/set_hinglish\n/set_pahari\n/set_kangri\n/set_mandyali"
+    await update.message.reply_text(text)
 
-bot.onText(/\/language/, (msg) => {
-  const text = `Choose Language:
-/set_hinglish
-/set_pahari
-/set_kangri
-/set_mandyali`;
-  bot.sendMessage(msg.chat.id, text);
-});
+async def set_hinglish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_lang_map[update.effective_user.id] = "hinglish"
+    await update.message.reply_text("Language set to Hinglish")
 
-bot.onText(/\/set_hinglish/, (msg) => {
-  userLangMap[msg.from.id] = "hinglish";
-  bot.sendMessage(msg.chat.id, "Language set to Hinglish 🇮🇳");
-});
+async def set_pahari(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_lang_map[update.effective_user.id] = "pahari"
+    await update.message.reply_text("Language set to General Pahari")
 
-bot.onText(/\/set_pahari/, (msg) => {
-  userLangMap[msg.from.id] = "pahari";
-  bot.sendMessage(msg.chat.id, "Language set to General Pahari 🏔️");
-});
+async def set_kangri(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_lang_map[update.effective_user.id] = "kangri"
+    await update.message.reply_text("Language set to Kangri")
 
-bot.onText(/\/set_kangri/, (msg) => {
-  userLangMap[msg.from.id] = "kangri";
-  bot.sendMessage(msg.chat.id, "Language set to Kangri 🏔️");
-});
+async def set_mandyali(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_lang_map[update.effective_user.id] = "mandyali"
+    await update.message.reply_text("Language set to Mandyali")
 
-bot.onText(/\/set_mandyali/, (msg) => {
-  userLangMap[msg.from.id] = "mandyali";
-  bot.sendMessage(msg.chat.id, "Language set to Mandyali 🏔️");
-});
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    memory_store[user_id] = []
+    save_memory(memory_store)
+    await update.message.reply_text("Memory reset ho gayi hai!")
 
-bot.onText(/\/reset/, (msg) => {
-  const userId = msg.from.id.toString();
-  memoryStore[userId] = [];
-  saveMemory(memoryStore);
-  bot.sendMessage(msg.chat.id, "🧠 Memory reset ho gayi hai!");
-});
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    user_text = update.message.text
+    lang = user_lang_map.get(update.effective_user.id, DEFAULT_LANG)
 
-// ─────────────────────────────────────────────
-// MAIN MESSAGE HANDLER (with memory)
-// ─────────────────────────────────────────────
-bot.on("message", async (msg) => {
-  if (!msg.text || msg.text.startsWith("/")) return;
+    if user_id not in memory_store:
+        memory_store[user_id] = []
 
-  const chatId   = msg.chat.id;
-  const userId   = msg.from.id.toString();
-  const userText = msg.text;
-  const lang     = userLangMap[userId] || DEFAULT_LANG;
+    history = memory_store[user_id][-10:]
 
-  if (!memoryStore[userId]) {
-    memoryStore[userId] = [];
-  }
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
-  const history = memoryStore[userId].slice(-10);
+    reply = ask_ai(user_text, lang, history)
 
-  bot.sendChatAction(chatId, "typing");
+    memory_store[user_id].append({"role": "user", "content": user_text})
+    memory_store[user_id].append({"role": "assistant", "content": reply})
 
-  const reply = await askAI(userText, lang, history);
+    save_memory(memory_store)
 
-  memoryStore[userId].push({ role: "user", content: userText });
-  memoryStore[userId].push({ role: "assistant", content: reply });
+    await update.message.reply_text(reply)
 
-  saveMemory(memoryStore);
+def main():
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
 
-  bot.sendMessage(chatId, reply);
-});
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("language", language_command))
+    app.add_handler(CommandHandler("set_hinglish", set_hinglish))
+    app.add_handler(CommandHandler("set_pahari", set_pahari))
+    app.add_handler(CommandHandler("set_kangri", set_kangri))
+    app.add_handler(CommandHandler("set_mandyali", set_mandyali))
+    app.add_handler(CommandHandler("reset", reset_command))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-// ─────────────────────────────────────────────
-// ERROR HANDLING
-// ─────────────────────────────────────────────
-bot.on("polling_error", (error) => {
-  console.error("Polling error:", error.message);
-});
+    print("Bot starting...")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+if __name__ == '__main__':
+    main()

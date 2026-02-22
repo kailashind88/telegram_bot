@@ -22,7 +22,7 @@ if not TELEGRAM_TOKEN:
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY not set!")
 
-db = Database("/app/data/rwa_bot.db")
+db = Database()
 rag = RWARAGSystem()
 groq_client = Groq(api_key=GROQ_API_KEY)
 SOCIETY_NAME = "Posh City RWA"
@@ -451,6 +451,25 @@ async def show_complaints(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += "   " + c["created_at"] + "\n\n"
     await update.message.reply_text(text, parse_mode="Markdown")
 
+
+async def debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    society = db.get_or_create_society(chat_id)
+    
+    if not db.is_admin(society["id"], chat_id, ADMIN_CHAT_ID):
+        await update.message.reply_text("Access denied!")
+        return
+    
+    residents = db.get_all_residents(society["id"])
+    text = "*Debug - Residents with Telegram IDs:*\n\n"
+    for r in residents:
+        text += "Flat " + r["flat_number"] + " - " + r["name"] + "\n"
+        text += "  Mobile: " + (r["mobile"] or "None") + "\n"
+        text += "  Telegram ID: " + (str(r["telegram_chat_id"]) or "NOT SET") + "\n"
+        text += "  Verified: " + str(r["is_verified"]) + "\n\n"
+    
+    await update.message.reply_text(text, parse_mode="Markdown")
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     text = update.message.text.strip()
@@ -494,6 +513,7 @@ def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("debug", debug_command))
     app.add_handler(CommandHandler("admin", admin_setup))
     app.add_handler(CommandHandler("add", add_resident_command))
     app.add_handler(CommandHandler("updatemobile", update_mobile_command))
@@ -513,4 +533,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

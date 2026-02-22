@@ -115,12 +115,9 @@ class Database:
                 (str(admin_chat_id), society_id)
             )
 
-    def is_admin(self, society_id, chat_id):
-        with self.get_conn() as conn:
-            row = conn.execute(
-                "SELECT admin_chat_id FROM societies WHERE id=?", (society_id,)
-            ).fetchone()
-        return row and row["admin_chat_id"] == str(chat_id)
+   def is_admin(self, society_id, chat_id):
+    if ADMIN_CHAT_ID and str(chat_id) == ADMIN_CHAT_ID:
+        return True
 
     # ── Flats ───────────────────────────────────────────────────
 

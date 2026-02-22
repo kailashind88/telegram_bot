@@ -452,6 +452,61 @@ async def show_complaints(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="Markdown")
 
 
+
+async def link_resident(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin manually kisi bhi resident ka Telegram ID link kare"""
+    chat_id = update.effective_chat.id
+    society = db.get_or_create_society(chat_id)
+
+    if not db.is_admin(society["id"], chat_id, ADMIN_CHAT_ID):
+        await update.message.reply_text("Access denied!")
+        return
+
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "Format:\n`/link 302 TELEGRAM_ID`\n\n"
+            "Telegram ID kaise milega:\n"
+            "Resident @userinfobot ko message kare",
+            parse_mode="Markdown"
+        )
+        return
+
+    flat_number = context.args[0]
+    telegram_id = context.args[1]
+
+    flat = db.get_flat(society["id"], flat_number)
+    if not flat:
+        await update.message.reply_text("Flat " + flat_number + " nahi mila.")
+        return
+
+    with db.get_conn() as conn:
+        conn.execute(
+            "UPDATE residents SET telegram_chat_id=?, is_verified=1 WHERE flat_id=?",
+            (str(telegram_id), flat["id"])
+        )
+
+    residents = db.get_residents_by_flat(flat["id"])
+    name = residents[0]["name"] if residents else "Resident"
+
+    await update.message.reply_text(
+        "Linked ho gaya!\n\n"
+        "Flat: " + flat_number + "\n"
+        "Naam: " + name + "\n"
+        "Telegram ID: " + telegram_id
+    )
+
+    try:
+        await context.bot.send_message(
+            chat_id=int(telegram_id),
+            text="Namaste " + name + " ji!\n\n"
+                 "Aap Posh City RWA Bot se linked ho gaye hain!\n"
+                 "Ab aapko society alerts milenge.\n\n"
+                 "/status - Apni due dekho\n"
+                 "/complaint - Complaint darj karo"
+        )
+    except:
+        pass
+
 async def debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     society = db.get_or_create_society(chat_id)
@@ -514,6 +569,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("debug", debug_command))
+    app.add_handler(CommandHandler("link", link_resident))
     app.add_handler(CommandHandler("admin", admin_setup))
     app.add_handler(CommandHandler("add", add_resident_command))
     app.add_handler(CommandHandler("updatemobile", update_mobile_command))

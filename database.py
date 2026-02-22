@@ -3,7 +3,7 @@ from datetime import datetime
 
 
 class Database:
-    def __init__(self, db_path="rwa_bot.db"):
+    def __init__(self, db_path="/app/data/rwa_bot.db"):
         self.db_path = db_path
 
     def get_conn(self):

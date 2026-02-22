@@ -549,9 +549,6 @@ def main():
 
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
-if __name__ == '__main__':
-    main()
-
 async def update_mobile_command(update, context):
     chat_id = update.effective_chat.id
     society = db.get_or_create_society(chat_id)
@@ -590,3 +587,6 @@ async def update_mobile_command(update, context):
         "Naam: " + name + "\n"
         "Naya Mobile: " + new_mobile
     )
+
+if __name__ == '__main__':
+    main()

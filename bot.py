@@ -22,7 +22,7 @@ if not TELEGRAM_TOKEN:
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY not set!")
 
-db = Database()
+db = Database("/app/data/rwa_bot.db")
 rag = RWARAGSystem()
 groq_client = Groq(api_key=GROQ_API_KEY)
 SOCIETY_NAME = "Posh City RWA"
@@ -513,3 +513,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

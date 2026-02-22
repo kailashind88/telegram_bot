@@ -65,21 +65,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def admin_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    
+    # Password check
+    if not context.args or context.args[0] != ADMIN_PASSWORD:
+        await update.message.reply_text("Galat password!")
+        return
+    
     society = db.get_or_create_society(chat_id)
     db.set_admin(society["id"], chat_id)
-    await update.message.reply_text(
-        "Admin setup ho gaya!\n\n"
-        "*Admin Commands:*\n"
-        "/add - Resident add karo\n"
-        "/pending - Pending list dekho\n"
-        "/paid - Paid mark karo\n"
-        "/reminder - Reminders bhejo\n"
-        "/alert - Society alert bhejo\n"
-        "/summary - Monthly summary\n"
-        "/residents - Saare residents\n"
-        "/upload - PDF se update karo",
-        parse_mode="Markdown"
-    )
+    await update.message.reply_text("Admin setup ho gaya!")
 
 async def add_resident_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -556,3 +550,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

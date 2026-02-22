@@ -7,8 +7,14 @@ from telegram.ext import Application, CommandHandler, MessageHandler, ContextTyp
 
 logging.basicConfig(level=logging.INFO)
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
+if not TELEGRAM_TOKEN:
+    raise ValueError("TELEGRAM_TOKEN environment variable not set!")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY environment variable not set!")
+
 DEFAULT_LANG = "hinglish"
 MEMORY_FILE = "memory.json"
 
@@ -38,7 +44,7 @@ def ask_ai(user_message, lang, history=None):
             response = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages)
             return response.choices[0].message.content
         else:
-            hindi_messages = [{"role": "system", "content": "You are a helpful assistant. Always reply in simple Hindi (Devanagari script). Keep reply short and conversational."}]
+            hindi_messages = [{"role": "system", "content": "You are a helpful assistant. Always reply in simple Hindi. Keep reply short."}]
             hindi_messages.extend(history)
             hindi_messages.append({"role": "user", "content": user_message})
             hindi_response = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=hindi_messages)
@@ -103,7 +109,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_memory(memory_store)
     await update.message.reply_text(reply)
 
-def main():
+if __name__ == '__main__':
+    print("Bot starting...")
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("language", language_command))
@@ -113,8 +120,4 @@ def main():
     app.add_handler(CommandHandler("set_mandyali", set_mandyali))
     app.add_handler(CommandHandler("reset", reset_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("Bot starting...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
-
-if __name__ == '__main__':
-    main()
+    app.run_polling()

@@ -59,6 +59,43 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     context.user_data["waiting_for"] = "flat_number"
 
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    society = db.get_or_create_society(chat_id)
+    is_admin_user = db.is_admin(society["id"], chat_id, ADMIN_CHAT_ID)
+
+    if is_admin_user:
+        text = (
+            "*Posh City RWA - Admin Commands*\n\n"
+            "*Residents:*\n"
+            "`/add 302 Sharma 9876543210` - Resident add karo\n"
+            "`/updatemobile 302 9876543210` - Mobile update karo\n"
+            "`/residents` - Saare residents dekho\n\n"
+            "*Maintenance:*\n"
+            "`/setdue 3500` - Is mahine ki due set karo\n"
+            "`/paid 302` - Flat paid mark karo\n"
+            "`/pending` - Pending list dekho\n"
+            "`/summary` - Monthly summary\n\n"
+            "*Alerts:*\n"
+            "`/reminder` - Pending walo ko reminder bhejo\n"
+            "`/alert Message` - Poori society ko alert bhejo\n\n"
+            "*Complaints:*\n"
+            "`/complaints` - Saari complaints dekho\n\n"
+            "*PDF:*\n"
+            "PDF file bhejo - Auto update ho jaayega"
+        )
+    else:
+        text = (
+            "*Posh City RWA - Commands*\n\n"
+            "`/start` - Bot shuru karo\n"
+            "`/status` - Apni maintenance due dekho\n"
+            "`/complaint Message` - Complaint darj karo\n"
+            "`/help` - Yeh list dekho"
+        )
+
+    await update.message.reply_text(text, parse_mode="Markdown")
+
 async def admin_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if not context.args or context.args[0] != ADMIN_PASSWORD:
@@ -456,6 +493,7 @@ def main():
     print("Posh City RWA Bot starting...")
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("admin", admin_setup))
     app.add_handler(CommandHandler("add", add_resident_command))
     app.add_handler(CommandHandler("updatemobile", update_mobile_command))
